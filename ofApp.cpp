@@ -10,9 +10,12 @@ constexpr void ofApp::fillWavetable() {
 void ofApp::setup() {
 	fillWavetable();
 	minimumFloat = std::numeric_limits<float>::min();
+	startPan = sqrt(0.5);
 	for (int a = 0; a < dataBits; a++) {
 		for (int b = 0; b < 2; b++) {
-			pan[a][b] = sqrt(0.5);
+			oscillators[a][0][b] = pow((float)sampleRate * 0.5, (float)(1 / (a + 2)));
+			phasePan[a][b] = startPan;
+			pan[a][b] = startPan;
 		}
 	}
 	shader.load("remoteAccess");
@@ -43,7 +46,7 @@ inline float ofApp::triangle(float phase, float skew) {
 	return (1.0 - abs(phase - skew)) * (2.0 - (abs(skew - 0.5) * 2.0));
 }
 
-inline float ofApp::lookup(float phase) {
+float ofApp::lookup(float phase) {
 	float floatIndex = phase * (float)wavetableSize;
 	float remainderIndex = fmod(floatIndex, 1.0);
 	int intIndex = (int)floatIndex;
@@ -62,7 +65,7 @@ void ofApp::audioOut(ofSoundBuffer& soundBuffer) {
 				parameters[b][c][0] = averageTwo(increments[b][c], averageIncrements[b][c], recipriocalTime);
 				parameters[b][c][1] += parameters[b][c][0];
 				parameters[b][c][1] = fmod(parameters[b][c][1], 1.0);
-				parameters[b][c][2] = lookup(parameters[b][c][1]);
+				parameters[b][c][2] = abs(lookup(parameters[b][c][1]));
 				switch (b) {
 				case 0:
 					phasePan[c][0] = sqrt(1.0 - parameters[b][c][2]);
@@ -74,13 +77,11 @@ void ofApp::audioOut(ofSoundBuffer& soundBuffer) {
 					break;
 				case 3:
 					for (int d = 0; d < channels; d++) {
-						//FIX
-						oscillators[c][0][d] = 0.25 * phasePan[c][d];
-						//
+						oscillators[c][0][d] += ofRandomf() * pow(parameters[2][c][2], time);
+						oscillators[c][0][d] = fmod(abs(oscillators[c][0][d]), 1.0);
 						oscillators[c][1][d] += pow(oscillators[c][0][d], c + 1);
 						oscillators[c][1][d] = fmod(oscillators[c][0][d], 1.0);
-						//sample[d] += triangle(oscillators[c][1][d], 0.5) * pan[c][d] * parameters[3][c][2] / 8.0;
-						sample[d] += lookup(oscillators[c][1][d]) * parameters[3][c][2] / 8.0;
+						sample[d] += triangle(oscillators[c][1][d], 0.5) * pan[c][d] * parameters[3][c][2] / 8.0;
 					}
 				}
 			}
@@ -145,15 +146,13 @@ void ofApp::updateState(int number, int position) {
 	bits[position] = bitset<dataBits>(number);
 	for (int a = 0; a < 8; a++) {
 		if (lastBits[position][a] != bits[position][a]) {
-			increments[position][a] = 0.001;
-			//increments[position][a] = 1.0 / (timers[position][a] + minimumFloat);
+			increments[position][a] = 1.0 / (timers[position][a] + minimumFloat);
 			parameters[position][a][0] = increments[position][a];
 			timers[position][a] = 0.0;
 			changes[position][a]++;
 			averageIncrements[position][a] = (averageIncrements[position][a] * (changes[position][a] - 1.0) + increments[position][a]) / changes[position][a];
 		}
 	}
-	values[number][position] += 1;
 }
 
 //--------------------------------------------------------------

@@ -6,7 +6,7 @@ class ofApp : public ofBaseApp {
 
 public:
 	static const int wavetableSize = 512, dataBits = 8, channels = 2, sampleRate = 48000, bufferSize = 256;
-	float minimumFloat, maxRoot, timer = 0.0, time = 1.0, recipriocalTime = 1.0 / time, width, height;
+	float minimumFloat, startPan, maxRoot, timer = 0.0, time = 1.0, recipriocalTime = 1.0 / time, width, height;
 	void setup();
 	array<float, wavetableSize> wavetable;
 	constexpr void fillWavetable();
@@ -14,8 +14,6 @@ public:
 	ofSoundStream stream;
 	void ofSoundStreamSetup(ofSoundStreamSettings& settings);
 	int number = 0, position = 0;
-	//values?
-	array<array<int, 4>, 256> values;
 	array<bitset<dataBits>, 4> lastBits;
 	array<bitset<dataBits>, 4> bits;
 	array<array<float, dataBits>, 4> timers;
@@ -25,7 +23,7 @@ public:
 	// averageTwo?
 	inline float averageTwo(float inA, float inB, float mix);
 	inline float triangle(float phase, float skew);
-	inline float lookup(float phase);
+	float lookup(float phase);
 	array<array<array<float, 3>, dataBits>, 4> parameters;
 	// samples?
 	array<array<float, channels>, dataBits> phasePan, pan;
