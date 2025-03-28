@@ -5,36 +5,30 @@
 class ofApp : public ofBaseApp {
 
 public:
-	static const int wavetableSize = 512, dataBits = 8, channels = 2, sampleRate = 48000, bufferSize = 256;
-	float minimumFloat, startPan, maxRoot, timer = 0.0, time = 1.0, recipriocalTime = 1.0 / time, width, height;
+	static const int wavetableSize = 512, maxValue = 256, channels = 2, sampleRate = 48000, bufferSize = 256;
+	float minimumFloat, maxRoot, amplitude = 1.0, timer = 0.0, time = 1.0, recipriocalTime = 1.0 / time, width, height;
+	array<float, 16> fibonacci;
+	array<float, maxValue> series, amplitudes, panValue, envelopes, increments, timbres, indicies, modPanValue, volumes;
+	float phaseIncrements[maxValue];
 	void setup();
 	array<float, wavetableSize> wavetable;
 	constexpr void fillWavetable();
 	ofSoundStreamSettings streamSettings;
 	ofSoundStream stream;
 	void ofSoundStreamSetup(ofSoundStreamSettings& settings);
-	int number = 0, position = 0;
-	array<bitset<dataBits>, 4> lastBits;
-	array<bitset<dataBits>, 4> bits;
-	array<array<float, dataBits>, 4> timers;
-	array<array<float, dataBits>, 4> increments;
-	array<array<float, dataBits>, 4> changes;
-	array<array<float, dataBits>, 4> averageIncrements;
-	// averageTwo?
+	int number = 0, position = 0, addressPulse = 0, address = 0, commandPulse = 0;
+	array<array<int, 4>, maxValue> values;
+	array<array<float, 2>, maxValue> phases;
+	array<int, maxValue> modulators;
 	inline float averageTwo(float inA, float inB, float mix);
 	inline float triangle(float phase, float skew);
-	float lookup(float phase);
-	array<array<array<float, 3>, dataBits>, 4> parameters;
-	// samples?
-	array<array<float, channels>, dataBits> phasePan, pan;
-	array<array<array<float, channels>, 2>, dataBits> oscillators;
-	// lastSample?
-	array<float, channels> sample;
-
+	inline float lookup(float phase);
+	array<array<float, channels>, maxValue> pan, modPan;
+	array<array<float, channels>, maxValue> samples;
+	array<float, channels> sample, lastSample;
 	void audioOut(ofSoundBuffer& soundBuffer);
 	ofVec2f window;
-	//data?
-	float data[256 * 4];
+	float data[maxValue * 4];
 	ofFbo frameBuffer;
 	ofShader shader;
 	void setUniforms();
