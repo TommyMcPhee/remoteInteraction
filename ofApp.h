@@ -29,6 +29,7 @@ public:
 	array<double, channels> lastSample, sample;
 	void audioOut(ofSoundBuffer& soundBuffer);
 	float parameterValues[64];
+	float timerValues[32];
 	ofVec4f filterVec;
 	ofVec2f window;
 	ofFbo frameBuffer;

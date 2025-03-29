@@ -60,13 +60,16 @@ void ofApp::audioOut(ofSoundBuffer& soundBuffer) {
 		timer++;
 		for (int b = 0; b < 4; b++) {
 			for (int c = 0; c < dataBits; c++) {
+				int vecIndex = c * 4;
 				timers[b][c]++;
 				recipriocalTimers[b][c] = 1.0 / timers[b][c];
 				increments[b][c] *= 1.0 - increments[b][c];
 				parameters[b][c][0] = averageTwo(increments[b][c], averageIncrements[b][c], 1.0 - recipriocalTimers[b][c]);
+				parameterValues[vecIndex + b] = (float)parameters[b][c][0];					
 				parameters[b][c][1] += parameters[b][c][0];
 				parameters[b][c][1] = fmod(parameters[b][c][1], 1.0);
 				parameters[b][c][2] = triangle(parameters[b][c][1]);
+				parameterValues[vecIndex + 32 + b] = (float)parameters[b][c][2];
 				if (b < 2) {
 					parameters[b][c][2] *= abs(parameters[b][c][2] - 0.5) * 2.0;
 				}
@@ -112,14 +115,14 @@ void ofApp::audioOut(ofSoundBuffer& soundBuffer) {
 void ofApp::setUniforms() {
 	shader.setUniform2f("window", window);
 	shader.setUniform1f("amplitude", amplitude);
+	shader.setUniform4fv("parameterValues", parameterValues, 16);
 	for (int a = 0; a < dataBits; a++) {
 		for (int b = 0; b < 4; b++) {
 			int vecIndex = a * 4;
-			parameterValues[vecIndex + b] = (float)parameters[b][a][0];
-			parameterValues[vecIndex + 32 + b] = (float)parameters[b][a][2];
+			timerValues[vecIndex + b] = (float)timers[b][a];
 		}
 	}
-	shader.setUniform4fv("parameterValues", parameterValues, 16);
+	shader.setUniform4fv("timerValues", timerValues, 8);
 	shader.setUniform4f("filterVec", filterVec);
 }
 
