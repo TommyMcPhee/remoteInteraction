@@ -6,6 +6,7 @@ uniform sampler2DRect tex0[8];
 in vec2 texCoordVarying;
 out vec4 outputColor;
 uniform vec2 window;
+uniform float recipriocalTime;
 uniform float amplitude;
 uniform vec4 parameterValues[16];
 uniform vec4 timerValues[8];
@@ -21,12 +22,12 @@ float beam2(vec2 normalizedVec, float xLocation, float yLocation, float xPower, 
     return pow(beam(normalizedVec.x, xLocation, xPower) * beam(normalizedVec.y, yLocation, yPower), 0.5 * (1.0 - (xPower * yPower)));
 }
 
-float processColor(float unprocessedColor){
-    return pow(unprocessedColor, 0.125);
-}
-
 float modQuotient(float valueIn, float moduloIn){
     return mod(valueIn, moduloIn) / moduloIn;
+}
+
+float processColor(float unprocessedColor){
+    return modQuotient(pow(unprocessedColor, 0.25), 0.5);
 }
 
 void main()
@@ -56,7 +57,7 @@ void main()
         highPass *= filterVec.y;
         bandPass *= filterVec.z;
         bandReject *= filterVec.w;
-        vec3 feedbackLayer = (lowPass + highPass + bandPass + bandReject) / 32.0;
+        vec3 feedbackLayer = (lowPass + highPass + bandPass + bandReject);
         feedbackColor += feedbackLayer;
     }
     aggregatePhases /= 8.0;
@@ -73,7 +74,14 @@ void main()
     beamColor.b = beam2(normalized, aggregatePhases.x * aggregatePhases.w, aggregatePhases.y * aggregatePhases.z, 1.0 - (aggregateFrequencies.y * aggregateFrequencies.z), 1.0 - (aggregateFrequencies.x * aggregateFrequencies.w));
     vec3 newColor = osColor * beamColor;
     vec3 color = mix(newColor, feedbackColor, abs(feedbackColor.r * feedbackColor.g * feedbackColor.b - 0.75));
-    vec3 processedColor = vec3(modQuotient(processColor(color.r), 1.0 - amplitude), modQuotient(processColor(color.g), 1.0 - amplitude), modQuotient(processColor(color.b), 1.0 - amplitude));
+    float inverseAmplitude = 1.0 - amplitude;
+    vec3 processedColor = vec3(modQuotient(processColor(color.r), inverseAmplitude), modQuotient(processColor(color.g), inverseAmplitude), modQuotient(processColor(color.b), inverseAmplitude));
     float white = processedColor.r * processedColor.g * processedColor.b;
-    outputColor = vec4(color - white, 1.0);
+    float secondary = modQuotient((color.r * color.g) + (color.r * color.b) + (color.g * color.b), recipriocalTime);
+    float primary = 1.0 - secondary;
+    float colorPallate = mix(secondary, primary, recipriocalTime * inverseAmplitude) - white;
+    float red = pow(colorPallate * color.r, 0.03125);
+    float green = pow(colorPallate * color.g, 0.03125);
+    float blue = pow(colorPallate * color.b, 0.03125);
+    outputColor = vec4(secondary * color, 1.0);
 }
