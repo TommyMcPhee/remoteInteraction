@@ -3,24 +3,22 @@
 //--------------------------------------------------------------
 constexpr void ofApp::fillWavetable() {
 	for (int a = 0; a < wavetableSize; a++) {
-		wavetable[a] = sin(TWO_PI * (float)a / wavetableSize);
+		wavetable[a] = sin(TWO_PI * (double)a / wavetableSize);
 	}
 }
 
 void ofApp::setup() {
 	fillWavetable();
-	minimumFloat = std::numeric_limits<float>::min();
 	startPan = sqrt(0.5);
 	for (int a = 0; a < dataBits; a++) {
-		phaseIncrements[a] = 0.5 / (float)(a + 2);
+		phaseIncrements[a] = pow(0.5, a + 2);
 		for (int b = 0; b < 2; b++) {
 			oscillators[a][0][b] = phaseIncrements[a];
-			cout << oscillators[a][0][b] << endl;
 			phasePan[a][b] = startPan;
 			pan[a][b] = startPan;
 		}
 	}
-	shader.load("remoteAccess");
+	shader.load("remoteInteraction");
 	frameBuffer.allocate(ofGetScreenWidth(), ofGetScreenHeight());
 	frameBuffer.begin();
 	ofClear(0, 0, 0, 255);
@@ -39,17 +37,17 @@ void ofApp::ofSoundStreamSetup(ofSoundStreamSettings& settings) {
 
 }
 
-inline float ofApp::averageTwo(float inA, float inB, float mix) {
+inline double ofApp::averageTwo(double inA, double inB, double mix) {
 	return (1.0 - mix) * inA + (inB * mix);
 }
 
-inline float ofApp::triangle(float phase) {
+inline double ofApp::triangle(double phase) {
 	return 1.0 - (2.0 * abs(phase - 0.5));
 }
 
-float ofApp::lookup(float phase) {
-	float floatIndex = phase * (float)wavetableSize;
-	float remainderIndex = fmod(floatIndex, 1.0);
+double ofApp::lookup(double phase) {
+	double floatIndex = phase * (double)wavetableSize;
+	double remainderIndex = fmod(floatIndex, 1.0);
 	int intIndex = (int)floatIndex;
 	if (intIndex >= wavetableSize - 1) {
 		intIndex = wavetableSize - 2;
@@ -58,18 +56,23 @@ float ofApp::lookup(float phase) {
 }
 
 void ofApp::audioOut(ofSoundBuffer& soundBuffer) {
-	//cout << sample[0] << endl;
 	for (int a = 0; a < soundBuffer.getNumFrames(); a++) {
 		timer++;
 		for (int b = 0; b < 4; b++) {
 			for (int c = 0; c < dataBits; c++) {
 				timers[b][c]++;
 				recipriocalTimers[b][c] = 1.0 / timers[b][c];
+				increments[b][c] *= 1.0 - increments[b][c];
 				parameters[b][c][0] = averageTwo(increments[b][c], averageIncrements[b][c], 1.0 - recipriocalTimers[b][c]);
 				parameters[b][c][1] += parameters[b][c][0];
 				parameters[b][c][1] = fmod(parameters[b][c][1], 1.0);
 				parameters[b][c][2] = triangle(parameters[b][c][1]);
-				parameters[b][c][2] *= abs(parameters[b][c][2] - 0.5) * 2.0;
+				if (b < 2) {
+					parameters[b][c][2] *= abs(parameters[b][c][2] - 0.5) * 2.0;
+				}
+				else {
+					parameters[b][c][2] *= parameters[b][c][2];
+				}
 				switch (b) {
 				case 0:
 					phasePan[c][0] = sqrt(1.0 - parameters[b][c][2]);
@@ -81,28 +84,43 @@ void ofApp::audioOut(ofSoundBuffer& soundBuffer) {
 					break;
 				case 3:
 					for (int d = 0; d < 2; d++) {
-						//amplitudes[c][d] += parameters[d][c][0] * (1.0 - amplitudes[c][d]);
-						//amplitudes[c][d] *= pow(1.0 - amplitudes[c][d], parameters[2 + d][c][0]);
+						amplitudes[c][d] *= pow(1.0 - (parameters[d][c][0] * parameters[2 + d][c][0]), amplitudes[c][d]);
 					}
 					for (int d = 0; d < channels; d++) {
-						oscillators[c][0][d] += (phaseIncrements[c] - abs(oscillators[c][0][d] - phaseIncrements[c])) * ofRandomf() * parameters[2][c][2];
+						oscillators[c][0][d] += phaseIncrements[c] * abs(oscillators[c][0][d] - phaseIncrements[c]) * ofRandomf() * parameters[2][c][2] * amplitudes[c][0] / (1.0 - phaseIncrements[c]);
 						oscillators[c][0][d] = fmod(abs(oscillators[c][0][d]), 1.0);
 						oscillators[c][1][d] += pow(oscillators[c][0][d], c + 1);
 						oscillators[c][1][d] = fmod(oscillators[c][1][d], 1.0);
-						sample[d] += lookup(oscillators[c][1][d]) * pan[c][d] * parameters[3][c][2] / 8.0;
+						sample[d] += lookup(oscillators[c][1][d]) * pan[c][d] * parameters[3][c][2] * amplitudes[c][1] / 8.0;
 					}
 				}
 			}
 		}
+		amplitude *= (1.0 - (1.0 / timer)) * ofClamp(timer / time, 0.0, 1.0);
 		for (int b = 0; b < channels; b++){
-			//amplitude *= pow(1.0 - recipriocalTime, amplitude) * ofClamp(timer/time, 0.0, 1.0);
+			sample[b] *= amplitude;
+			highPass = averageTwo(sample[b], -1.0 * lastSample[b], filter[b]);
+			lowPass = averageTwo(sample[b], lastSample[b], filter[b + 2]);
+			sample[b] = averageTwo(highPass, lowPass, 0.5);
+			lastSample[b] = sample[b];
 			soundBuffer[a * channels + b] = sample[b];
+			sample[b] = 0.0;
 		}
 	}
 }
 
 void ofApp::setUniforms() {
 	shader.setUniform2f("window", window);
+	shader.setUniform1f("amplitude", amplitude);
+	for (int a = 0; a < dataBits; a++) {
+		for (int b = 0; b < 4; b++) {
+			int vecIndex = a * 4;
+			parameterValues[vecIndex + b] = (float)parameters[b][a][0];
+			parameterValues[vecIndex + 32 + b] = (float)parameters[b][a][2];
+		}
+	}
+	shader.setUniform4fv("parameterValues", parameterValues, 16);
+	shader.setUniform4f("filterVec", filterVec);
 }
 
 //--------------------------------------------------------------
@@ -143,13 +161,29 @@ void ofApp::keyPressed(int key) {
 }
 
 void ofApp::updateState(int number, int position) {
-	//cout << number << " " << position << endl;
+	cout << number << " " << position << endl;
 	number %= 256;
 	position %= 4;
+	lastValues[position] = values[position];
+	values[position] = number;
+	differenceValues[position] = 1.0 / (double)(abs(lastValues[position] - values[position]) + 1);
+	if (position < 2) {
+		filter[0] = sqrt(sqrt(1.0 - differenceValues[0]) * differenceValues[2]);
+		filter[1] = sqrt(sqrt(differenceValues[0]) * differenceValues[2]);
+	}
+	else {
+		filter[2] = sqrt(sqrt(1.0 - differenceValues[1]) * differenceValues[3]);
+		filter[3] = sqrt(sqrt(differenceValues[1]) * differenceValues[3]);
+	}
+	filterVec.set((float)filter[0], (float)filter[1], (float)filter[2], (float)filter[3]);
 	lastBits[position] = bits[position];
 	bits[position] = bitset<dataBits>(number);
 	for (int a = 0; a < dataBits; a++) {
 		if (lastBits[position][a] != bits[position][a]) {
+			if (position == 3) {
+				amplitudes[a][0] = 1.0;
+				amplitudes[a][1] = 1.0;
+			}
 			increments[position][a] = (oscillators[a][0][0] * oscillators[a][0][1]) * pow(recipriocalTimers[position][a], parameters[position][a][2] * (1.0 - recipriocalTime) + recipriocalTime);
 			parameters[position][a][0] = increments[position][a];
 			timers[position][a] = 0.0;
